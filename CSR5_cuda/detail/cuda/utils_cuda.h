@@ -65,36 +65,36 @@ void sum_32(volatile  T *s_sum,
     s_sum[local_id] += s_sum[local_id + 1];
 }
 
-#if __CUDA_ARCH__ <= 300
+// #if __CUDA_ARCH__ <= 300
 
-__device__ __forceinline__
-double __shfl_down(double var, unsigned int srcLane, int width=32)
-{
-    int2 a = *reinterpret_cast<int2*>(&var);
-    a.x = __shfl_down(a.x, srcLane, width);
-    a.y = __shfl_down(a.y, srcLane, width);
-    return *reinterpret_cast<double*>(&a);
-}
+// __device__ __forceinline__
+// double __shfl_down_sync(0x7FFFFFFF, double var, unsigned int srcLane, int width=32)
+// {
+//     int2 a = *reinterpret_cast<int2*>(&var);
+//     a.x = __shfl_down_sync(0x7FFFFFFF, a.x, srcLane, width);
+//     a.y = __shfl_down_sync(0x7FFFFFFF, a.y, srcLane, width);
+//     return *reinterpret_cast<double*>(&a);
+// }
 
-__device__ __forceinline__
-double __shfl_up(double var, unsigned int srcLane, int width=32)
-{
-    int2 a = *reinterpret_cast<int2*>(&var);
-    a.x = __shfl_up(a.x, srcLane, width);
-    a.y = __shfl_up(a.y, srcLane, width);
-    return *reinterpret_cast<double*>(&a);
-}
+// __device__ __forceinline__
+// double __shfl_up_sync(0x7FFFFFFF, double var, unsigned int srcLane, int width=32)
+// {
+//     int2 a = *reinterpret_cast<int2*>(&var);
+//     a.x = __shfl_up_sync(0x7FFFFFFF, a.x, srcLane, width);
+//     a.y = __shfl_up_sync(0x7FFFFFFF, a.y, srcLane, width);
+//     return *reinterpret_cast<double*>(&a);
+// }
 
-__device__ __forceinline__
-double __shfl_xor(double var, int srcLane, int width=32)
-{
-    int2 a = *reinterpret_cast<int2*>(&var);
-    a.x = __shfl_xor(a.x, srcLane, width);
-    a.y = __shfl_xor(a.y, srcLane, width);
-    return *reinterpret_cast<double*>(&a);
-}
+// __device__ __forceinline__
+// double __shfl_xor_sync(0x7FFFFFFF, double var, int srcLane, int width=32)
+// {
+//     int2 a = *reinterpret_cast<int2*>(&var);
+//     a.x = __shfl_xor_sync(0x7FFFFFFF, a.x, srcLane, width);
+//     a.y = __shfl_xor_sync(0x7FFFFFFF, a.y, srcLane, width);
+//     return *reinterpret_cast<double*>(&a);
+// }
 
-#endif
+// #endif
 
 template<typename vT>
 __forceinline__ __device__
@@ -102,11 +102,11 @@ vT sum_32_shfl(vT sum)
 {
 //    #pragma unroll
 //    for (int offset = ANONYMOUSLIB_CSR5_OMEGA / 2; offset > 0; offset >>= 1)
-//        sum += __shfl_down(sum, offset);
+//        sum += __shfl_down_sync(0x7FFFFFFF, sum, offset);
 
     #pragma unroll
     for(int mask = ANONYMOUSLIB_CSR5_OMEGA / 2 ; mask > 0 ; mask >>= 1)
-        sum += __shfl_xor(sum, mask);
+        sum += __shfl_xor_sync(0x7FFFFFFF, sum, mask);
 
     return sum;
 }
@@ -163,19 +163,19 @@ T scan_32_shfl(T         x,
 //    #pragma unroll
 //    for( int offset = 1 ; offset < ANONYMOUSLIB_CSR5_OMEGA ; offset <<= 1 )
 //    {
-//        T y = __shfl_up(x, offset);
+//        T y = __shfl_up_sync(0x7FFFFFFF, x, offset);
 //        x = local_id >= offset ? x + y : x;
 //    }
 
-    T y = __shfl_up(x, 1);
+    T y = __shfl_up_sync(0x7FFFFFFF, x, 1);
     x = local_id >= 1 ? x + y : x;
-    y = __shfl_up(x, 2);
+    y = __shfl_up_sync(0x7FFFFFFF, x, 2);
     x = local_id >= 2 ? x + y : x;
-    y = __shfl_up(x, 4);
+    y = __shfl_up_sync(0x7FFFFFFF, x, 4);
     x = local_id >= 4 ? x + y : x;
-    y = __shfl_up(x, 8);
+    y = __shfl_up_sync(0x7FFFFFFF, x, 8);
     x = local_id >= 8 ? x + y : x;
-    y = __shfl_up(x, 16);
+    y = __shfl_up_sync(0x7FFFFFFF, x, 16);
     x = local_id >= 16 ? x + y : x;
 
     return x;
@@ -187,7 +187,8 @@ enum
     STEPS = 5,
 
     // The 5-bit SHFL mask for logically splitting warps into sub-segments starts 8-bits up
-    SHFL_C = ((-1 << STEPS) & 31) << 8
+    // SHFL_C = ((-1 << STEPS) & 31) << 8
+    SHFL_C = 0
 };
 
 // inclusive scan for double data type
@@ -204,12 +205,14 @@ double scan_32_shfl(double    x)
             "  .reg .s32 hi;"
             "  .reg .pred p;"
             "  mov.b64 {lo, hi}, %1;"
-            "  shfl.up.b32 lo|p, lo, %2, %3;"
-            "  shfl.up.b32 hi|p, hi, %2, %3;"
+            // "  shfl.up.b32 lo|p, lo, %2, %3;"
+            // "  shfl.up.b32 hi|p, hi, %2, %3;"
+            "  shfl.sync.up.b32 lo|p, lo, %2, %3, %4;"
+            "  shfl.sync.up.b32 hi|p, hi, %2, %3, %4;"
             "  mov.b64 %0, {lo, hi};"
             "  @p add.f64 %0, %0, %1;"
             "}"
-            : "=d"(x) : "d"(x), "r"(1 << STEP), "r"(SHFL_C));
+            : "=d"(x) : "d"(x), "r"(1 << STEP), "r"(SHFL_C), "r"(0x7FFFFFFF) );
     }
 
     return x;
@@ -260,7 +263,7 @@ T scan_plus1_shfl(volatile  T *s_scan,
         if (lane_id == ANONYMOUSLIB_THREAD_BUNCH - 1)
             s_scan[seg_id] = r_scan;
 
-        r_scan = __shfl_up(r_scan, 1);
+        r_scan = __shfl_up_sync(0x7FFFFFFF, r_scan, 1);
         r_scan = lane_id ? r_scan : 0;
     //}
 
@@ -336,22 +339,22 @@ void fetch_x(cudaTextureObject_t  d_x_tex,
     *x = __hiloint2double(x_int2.y, x_int2.x);
 }
 
-__forceinline__ __device__
-static double atomicAdd(double *addr, double val)
-{
-    double old = *addr, assumed;
-    do
-    {
-        assumed = old;
-        old = __longlong_as_double(
-                    atomicCAS((unsigned long long int*)addr,
-                              __double_as_longlong(assumed),
-                              __double_as_longlong(val+assumed)));
+// __forceinline__ __device__
+// static double atomicAdd(double *addr, double val)
+// {
+//     double old = *addr, assumed;
+//     do
+//     {
+//         assumed = old;
+//         old = __longlong_as_double(
+//                     atomicCAS((unsigned long long int*)addr,
+//                               __double_as_longlong(assumed),
+//                               __double_as_longlong(val+assumed)));
 
-    }while(assumed != old);
+//     }while(assumed != old);
 
-    return old;
-}
+//     return old;
+// }
 
 __global__
 void warmup_kernel(int *d_scan)

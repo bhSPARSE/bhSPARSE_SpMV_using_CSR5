@@ -28,10 +28,10 @@ vT segmented_sum_shfl(vT        tmp_sum,
                       const int scansum_offset,
                       const int lane_id)
 {
-    vT sum = __shfl_down(tmp_sum, 1);
+    vT sum = __shfl_down_sync(0x7FFFFFFF, tmp_sum, 1);
     sum = lane_id == ANONYMOUSLIB_CSR5_OMEGA - 1 ? 0 : sum;
     vT scan_sum = scan_32_shfl(sum); //scan_32_shfl<vT>(sum, lane_id); // inclusive scan
-    tmp_sum = __shfl_down(scan_sum, scansum_offset);
+    tmp_sum = __shfl_down_sync(0x7FFFFFFF, scan_sum, scansum_offset);
     tmp_sum = tmp_sum - scan_sum + sum;
 
     return tmp_sum;
@@ -229,8 +229,8 @@ void spmv_partition(const iT           *d_column_index_partition,
 #if __CUDA_ARCH__ >= 350
     if (lane_id < 2)
         row_start = __ldg(&d_partition_pointer[par_id + lane_id]);
-    row_stop = __shfl(row_start, 1);
-    row_start = __shfl(row_start, 0);
+    row_stop = __shfl_sync(0x7FFFFFFF, row_start, 1);
+    row_start = __shfl_sync(0x7FFFFFFF, row_start, 0);
     row_stop &= 0x7FFFFFFF;
 #else
     volatile __shared__ uiT s_row_start_stop[ANONYMOUSLIB_THREAD_GROUP / ANONYMOUSLIB_CSR5_OMEGA + 1];

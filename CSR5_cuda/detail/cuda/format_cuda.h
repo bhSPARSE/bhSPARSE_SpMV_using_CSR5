@@ -16,6 +16,7 @@ int format_warmup()
         warmup_kernel<<< num_blocks, num_threads >>>(d_scan);
 
     checkCudaErrors(cudaFree(d_scan));
+    return ANONYMOUSLIB_SUCCESS;
 }
 
 template<typename iT, typename uiT>
@@ -440,8 +441,8 @@ void generate_partition_descriptor_offset_partition(const iT           *d_row_po
 #if __CUDA_ARCH__ >= 350
     if (lane_id < 2)
         row_start = __ldg(&d_partition_pointer[par_id + lane_id]);
-    row_stop = __shfl(row_start, 1);
-    row_start = __shfl(row_start, 0);
+    row_stop = __shfl_sync(0x7FFFFFFF, row_start, 1);
+    row_start = __shfl_sync(0x7FFFFFFF, row_start, 0);
     row_stop &= 0x7FFFFFFF;
 #else
     volatile __shared__ uiT s_row_start_stop[ANONYMOUSLIB_THREAD_GROUP / ANONYMOUSLIB_CSR5_OMEGA + 1];
